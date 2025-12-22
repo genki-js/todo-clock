@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Minimal Clock Todo - Repeat & Alarm</title>
+
+<style>
+:root {
+    --bg:#f9fafb;
+    --panel:#ffffff;
+    --text:#111827;
+    --muted:#6b7280;
+    --accent:#ef4444;
+    --border:#e5e7eb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    height: 100vh;
+}
+
+/* ===== CLOCK ===== */
+.clock {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.clock-time {
+    font-size: clamp(6rem, 15vw, 12rem);
+    font-weight: 600;
+    letter-spacing: -0.05em;
+}
+
+.clock-date {
+    margin-top: 8px;
+    font-size: 1rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+}
+
+/* ===== TODOS ===== */
+.todos {
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.todos header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.todos h2 {
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+}
+
+button {
+    background: none;
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: #f3f4f6;
+}
+
+.todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ===== TODO ITEM ===== */
+.todo {
+    padding: 14px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    position: relative;
+}
+
+.todo header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.todo h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* ===== ALERT ANIMATION ===== */
+@keyframes subtleShake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    50% { transform: translateX(2px); }
+    75% { transform: translateX(-2px); }
+    100% { transform: translateX(0); }
+}
+
+.todo.alert {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(239,68,68,0.15);
+    animation: subtleShake 0.4s ease-in-out infinite;
+}
+
+/* ===== MODAL ===== */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal.active { display: flex; }
+
+.modal-content {
+    background: var(--panel);
+    border-radius: 16px;
+    padding: 24px;
+    width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.modal-content h3 { margin: 0; font-size: 1.1rem; }
+
+.modal-content input[type="text"], 
+.modal-content input[type="date"], 
+.modal-content input[type="time"] {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 0.9rem;
+    width: 100%;
+}
+
+.repeat-options {
+    font-size: 0.85rem;
+    display: flex;
+    gap: 10px;
+    color: var(--muted);
+}
+
+.weekday-selector {
+    display: none;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 8px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.weekday-selector label {
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+    <div class="clock">
+        <div class="clock-time" id="clockTime">--:--</div>
+        <div class="clock-date" id="clockDate">----.--.-- ---</div>
+    </div>
+
+    <div class="todos">
+        <header>
+            <h2>TODOS</h2>
+            <button onclick="openModal()">＋ Add</button>
+        </header>
+        <div class="todo-list" id="todoList"></div>
+    </div>
+</div>
+
+<div class="modal" id="modal">
+    <div class="modal-content">
+        <h3>New Alarm</h3>
+        <input id="titleInput" type="text" placeholder="内容を入力...">
+        
+        <div class="repeat-options">
+            <label><input type="radio" name="repeatType" value="once" checked onchange="toggleRepeatUI()"> 1回</label>
+            <label><input type="radio" name="repeatType" value="daily" onchange="toggleRepeatUI()"> 毎日</label>
+            <label><input type="radio" name="repeatType" value="weekly" onchange="toggleRepeatUI()"> 曜日</label>
+        </div>
+
+        <div id="dateInputContainer">
+            <input type="date" id="dateInput">
+        </div>
+
+        <div id="weekdayInputContainer" class="weekday-selector">
+            <label><input type="checkbox" class="wd-check" value="1">月</label>
+            <label><input type="checkbox" class="wd-check" value="2">火</label>
+            <label><input type="checkbox" class="wd-check" value="3">水</label>
+            <label><input type="checkbox" class="wd-check" value="4">木</label>
+            <label><input type="checkbox" class="wd-check" value="5">金</label>
+            <label><input type="checkbox" class="wd-check" value="6">土</label>
+            <label><input type="checkbox" class="wd-check" value="0">日</label>
+        </div>
+
+        <input type="time" id="timeInput">
+
+        <div class="modal-actions">
+            <button onclick="closeModal()">Cancel</button>
+            <button onclick="saveTodo()" style="background: var(--text); color: white; border: none;">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ===== ALARM SOUND (Web Audio API) ===== */
+let alarmInterval = null;
+
+function playAlarmSound() {
+    if (alarmInterval) return; // すでに鳴っている場合は重複させない
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const beep = () => {
+        [0, 0.2].forEach(delay => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime + delay);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime + delay);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(audioCtx.currentTime + delay);
+            osc.stop(audioCtx.currentTime + delay + 0.1);
+        });
+    };
+    beep();
+    alarmInterval = setInterval(beep, 1500);
+}
+
+function stopAlarmSound() {
+    if (alarmInterval) {
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+    }
+}
+
+/* ===== CLOCK ===== */
+function updateClock() {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2,"0");
+    const m = String(d.getMinutes()).padStart(2,"0");
+    document.getElementById("clockTime").textContent = `${h}:${m}`;
+
+    const days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+    document.getElementById("clockDate").textContent =
+        `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")} ${days[d.getDay()]}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ===== DATA MANAGEMENT ===== */
+let todos = JSON.parse(localStorage.getItem("todos") || "[]");
+
+function render() {
+    const list = document.getElementById("todoList");
+    list.innerHTML = "";
+    
+    todos.forEach(t => {
+        const el = document.createElement("div");
+        el.className = "todo" + (t.notified ? " alert" : "");
+        el.id = "todo-" + t.id;
+
+        let scheduleDisp = "";
+        if (t.repeatType === "once") scheduleDisp = t.date;
+        else if (t.repeatType === "daily") scheduleDisp = "毎日";
+        else {
+            const dayNames = ["日","月","火","水","木","金","土"];
+            scheduleDisp = t.weekdays.map(d => dayNames[d]).join("");
+        }
+
+        el.innerHTML = `
+            <header>
+                <span>${scheduleDisp} ${t.time}</span>
+                <span style="cursor:pointer; font-weight:bold;" onclick="removeTodo(${t.id})">×</span>
+            </header>
+            <h3>${t.title}</h3>
+        `;
+        list.appendChild(el);
+    });
+}
+
+function removeTodo(id) {
+    todos = todos.filter(t => t.id !== id);
+    localStorage.setItem("todos", JSON.stringify(todos));
+    
+    // 全てのアラートがなくなれば音を止める
+    if (!todos.some(t => t.notified)) {
+        stopAlarmSound();
+    }
+    render();
+}
+
+/* ===== MODAL LOGIC ===== */
+function toggleRepeatUI() {
+    const type = document.querySelector('input[name="repeatType"]:checked').value;
+    document.getElementById("dateInputContainer").style.display = (type === "once") ? "block" : "none";
+    document.getElementById("weekdayInputContainer").style.display = (type === "weekly") ? "flex" : "none";
+}
+
+function openModal() {
+    const now = new Date();
+    document.getElementById("titleInput").value = "";
+    document.getElementById("dateInput").value = now.toISOString().split("T")[0];
+    document.getElementById("timeInput").value = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    document.getElementById("modal").classList.add("active");
+}
+
+function closeModal() {
+    document.getElementById("modal").classList.remove("active");
+}
+
+function saveTodo() {
+    const title = document.getElementById("titleInput").value;
+    if (!title) return;
+
+    const repeatType = document.querySelector('input[name="repeatType"]:checked').value;
+    const time = document.getElementById("timeInput").value;
+    const date = document.getElementById("dateInput").value;
+    
+    let weekdays = [];
+    if (repeatType === "weekly") {
+        document.querySelectorAll(".wd-check:checked").forEach(el => weekdays.push(parseInt(el.value)));
+        if (weekdays.length === 0) return alert("曜日を選択してください");
+    }
+
+    todos.push({
+        id: Date.now(),
+        title: title,
+        repeatType: repeatType,
+        date: repeatType === "once" ? date : null,
+        weekdays: weekdays,
+        time: time,
+        notified: false,
+        lastNotifiedDate: null // 同じ日に何度も鳴らないように制御
+    });
+
+    localStorage.setItem("todos", JSON.stringify(todos));
+    closeModal();
+    render();
+}
+
+/* ===== MONITORING ===== */
+function checkTodos() {
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    const currentTimeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    
+    let changed = false;
+
+    todos.forEach(t => {
+        // 条件判定
+        let isMatch = false;
+        if (t.time === currentTimeStr && t.lastNotifiedDate !== todayStr) {
+            if (t.repeatType === "once" && t.date === todayStr) isMatch = true;
+            else if (t.repeatType === "daily") isMatch = true;
+            else if (t.repeatType === "weekly" && t.weekdays.includes(now.getDay())) isMatch = true;
+        }
+
+        if (isMatch) {
+            t.notified = true;
+            t.lastNotifiedDate = todayStr;
+            changed = true;
+
+            // ブラウザ通知
+            if (Notification.permission === "granted") {
+                new Notification("Alarm", { body: t.title });
+            }
+        }
+    });
+
+    // アラーム音のループ管理
+    if (todos.some(t => t.notified)) {
+        playAlarmSound();
+    }
+
+    if (changed) {
+        localStorage.setItem("todos", JSON.stringify(todos));
+        render();
+    }
+}
+
+setInterval(checkTodos, 1000);
+render();
+
+// 通知の許可
+if (window.Notification) {
+    Notification.requestPermission();
+}
+</script>
+</body>
+</html>
