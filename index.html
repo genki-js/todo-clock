@@ -87,6 +87,25 @@ button:hover {
     background: #f3f4f6;
 }
 
+.fullscreen-btn {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: none;
+}
+
+/* Pseudo-fullscreen fallback for iPad / browsers without full Fullscreen API */
+.pseudo-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 9999 !important;
+    background: var(--bg) !important;
+    overflow: hidden !important;
+}
+
 .todo-list {
     display: flex;
     flex-direction: column;
@@ -208,7 +227,10 @@ button:hover {
     <div class="todos">
         <header>
             <h2>TODOS</h2>
-            <button onclick="openModal()">＋ Add</button>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button onclick="openModal()">＋ Add</button>
+                <button id="fullscreenBtn" class="fullscreen-btn" onclick="toggleFullscreen()">全画面</button>
+            </div>
         </header>
         <div class="todo-list" id="todoList"></div>
     </div>
@@ -433,6 +455,67 @@ render();
 if (window.Notification) {
     Notification.requestPermission();
 }
+
+/* ===== FULLSCREEN (iPad-friendly) ===== */
+function isNativeFullscreenSupported() {
+    return !!(
+        document.fullscreenEnabled ||
+        document.webkitFullscreenEnabled ||
+        document.msFullscreenEnabled
+    );
+}
+
+function toggleFullscreen() {
+    // If already in native fullscreen -> exit
+    const fsElement = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+    if (fsElement) {
+        exitFullscreen();
+        return;
+    }
+
+    // Try native request if supported, otherwise enable pseudo-fullscreen
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+
+    if (req) {
+        req.call(el).catch(() => {
+            // fallback
+            enablePseudoFullscreen();
+        });
+    } else {
+        enablePseudoFullscreen();
+    }
+}
+
+function exitFullscreen() {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
+        exit.call(document).catch(() => disablePseudoFullscreen());
+    } else {
+        disablePseudoFullscreen();
+    }
+}
+
+function enablePseudoFullscreen() {
+    document.body.classList.add('pseudo-fullscreen');
+    document.getElementById('fullscreenBtn').textContent = '戻る';
+}
+
+function disablePseudoFullscreen() {
+    document.body.classList.remove('pseudo-fullscreen');
+    document.getElementById('fullscreenBtn').textContent = '全画面';
+}
+
+document.addEventListener('fullscreenchange', () => {
+    const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    document.getElementById('fullscreenBtn').textContent = isFS ? '戻る' : '全画面';
+    if (!isFS) disablePseudoFullscreen();
+});
+
+// Update button text on load in case of state
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('fullscreenBtn').textContent = '全画面';
+});
 </script>
 </body>
 </html>
