@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Minimal Clock Todo - Repeat & Alarm</title>
+<title>Precision Clock Todo - Repeat & Alarm</title>
 
 <style>
 :root {
@@ -83,9 +83,7 @@ button {
     transition: background 0.2s;
 }
 
-button:hover {
-    background: #f3f4f6;
-}
+button:hover { background: #f3f4f6; }
 
 .fullscreen-btn {
     border: 1px solid var(--border);
@@ -93,17 +91,6 @@ button:hover {
     border-radius: 8px;
     cursor: pointer;
     background: none;
-}
-
-/* Pseudo-fullscreen fallback for iPad / browsers without full Fullscreen API */
-.pseudo-fullscreen {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    z-index: 9999 !important;
-    background: var(--bg) !important;
-    overflow: hidden !important;
 }
 
 .todo-list {
@@ -119,6 +106,7 @@ button:hover {
     border-radius: 12px;
     background: var(--panel);
     position: relative;
+    transition: all 0.3s ease;
 }
 
 .todo header {
@@ -135,7 +123,7 @@ button:hover {
     font-weight: 500;
 }
 
-/* ===== ALERT ANIMATION ===== */
+/* ALERT ANIMATION */
 @keyframes subtleShake {
     0% { transform: translateX(0); }
     25% { transform: translateX(-2px); }
@@ -146,7 +134,8 @@ button:hover {
 
 .todo.alert {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px rgba(239,68,68,0.15);
+    box-shadow: 0 0 10px rgba(239,68,68,0.2);
+    background: #fffafa;
     animation: subtleShake 0.4s ease-in-out infinite;
 }
 
@@ -173,15 +162,10 @@ button:hover {
     gap: 14px;
 }
 
-.modal-content h3 { margin: 0; font-size: 1.1rem; }
-
-.modal-content input[type="text"], 
-.modal-content input[type="date"], 
-.modal-content input[type="time"] {
+.modal-content input {
     padding: 10px;
     border-radius: 8px;
     border: 1px solid var(--border);
-    font-size: 0.9rem;
     width: 100%;
 }
 
@@ -189,7 +173,6 @@ button:hover {
     font-size: 0.85rem;
     display: flex;
     gap: 10px;
-    color: var(--muted);
 }
 
 .weekday-selector {
@@ -201,24 +184,18 @@ button:hover {
     border-radius: 8px;
 }
 
-.weekday-selector label {
-    font-size: 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 10px;
+/* Pseudo-fullscreen for iPad */
+.pseudo-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    background: var(--bg) !important;
 }
 </style>
 </head>
 
 <body>
-<div class="container">
+<div class="container" id="mainContainer">
     <div class="clock">
         <div class="clock-time" id="clockTime">--:--</div>
         <div class="clock-date" id="clockDate">----.--.-- ---</div>
@@ -227,9 +204,9 @@ button:hover {
     <div class="todos">
         <header>
             <h2>TODOS</h2>
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div style="display:flex;gap:8px;">
                 <button onclick="openModal()">＋ Add</button>
-                <button id="fullscreenBtn" class="fullscreen-btn" onclick="toggleFullscreen()">全画面</button>
+                <button id="fullscreenBtn" onclick="toggleFullscreen()">全画面</button>
             </div>
         </header>
         <div class="todo-list" id="todoList"></div>
@@ -263,53 +240,22 @@ button:hover {
 
         <input type="time" id="timeInput">
 
-        <div class="modal-actions">
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
             <button onclick="closeModal()">Cancel</button>
-            <button onclick="saveTodo()" style="background: var(--text); color: white; border: none;">Save</button>
+            <button onclick="saveTodo()" style="background:var(--text);color:white;">Save</button>
         </div>
     </div>
 </div>
 
 <script>
-/* ===== ALARM SOUND (Web Audio API) ===== */
+let todos = JSON.parse(localStorage.getItem("todos") || "[]");
 let alarmInterval = null;
-
-function playAlarmSound() {
-    if (alarmInterval) return; // すでに鳴っている場合は重複させない
-
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const beep = () => {
-        [0, 0.2].forEach(delay => {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(880, audioCtx.currentTime + delay);
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime + delay);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.1);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(audioCtx.currentTime + delay);
-            osc.stop(audioCtx.currentTime + delay + 0.1);
-        });
-    };
-    beep();
-    alarmInterval = setInterval(beep, 1500);
-}
-
-function stopAlarmSound() {
-    if (alarmInterval) {
-        clearInterval(alarmInterval);
-        alarmInterval = null;
-    }
-}
 
 /* ===== CLOCK ===== */
 function updateClock() {
     const d = new Date();
-    const h = String(d.getHours()).padStart(2,"0");
-    const m = String(d.getMinutes()).padStart(2,"0");
-    document.getElementById("clockTime").textContent = `${h}:${m}`;
-
+    document.getElementById("clockTime").textContent = 
+        `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
     const days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
     document.getElementById("clockDate").textContent =
         `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")} ${days[d.getDay()]}`;
@@ -317,30 +263,53 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-/* ===== DATA MANAGEMENT ===== */
-let todos = JSON.parse(localStorage.getItem("todos") || "[]");
+/* ===== CALCULATION LOGIC (MS Based) ===== */
+function calculateNextTrigger(repeatType, timeStr, dateStr, weekdays) {
+    const [hrs, mins] = timeStr.split(':').map(Number);
+    let target = new Date();
+    
+    if (repeatType === "once") {
+        target = new Date(`${dateStr}T${timeStr}:00`);
+        return target.getTime();
+    }
 
+    target.setHours(hrs, mins, 0, 0);
+    
+    // すでに今日の時刻を過ぎていたら明日以降を探す
+    if (target.getTime() <= Date.now()) {
+        target.setDate(target.getDate() + 1);
+    }
+
+    if (repeatType === "weekly") {
+        while (!weekdays.includes(target.getDay())) {
+            target.setDate(target.getDate() + 1);
+        }
+    }
+    return target.getTime();
+}
+
+/* ===== ACTIONS ===== */
 function render() {
     const list = document.getElementById("todoList");
     list.innerHTML = "";
-    
+    // 未来の実行時刻が近い順にソート
+    todos.sort((a, b) => a.nextTriggerTime - b.nextTriggerTime);
+
     todos.forEach(t => {
         const el = document.createElement("div");
         el.className = "todo" + (t.notified ? " alert" : "");
-        el.id = "todo-" + t.id;
-
-        let scheduleDisp = "";
-        if (t.repeatType === "once") scheduleDisp = t.date;
-        else if (t.repeatType === "daily") scheduleDisp = "毎日";
-        else {
-            const dayNames = ["日","月","火","水","木","金","土"];
-            scheduleDisp = t.weekdays.map(d => dayNames[d]).join("");
-        }
+        
+        let schedule = "";
+        if (t.repeatType === "once") schedule = t.date;
+        else if (t.repeatType === "daily") schedule = "毎日";
+        else schedule = t.weekdays.map(d => ["日","月","火","水","木","金","土"][d]).join("");
 
         el.innerHTML = `
             <header>
-                <span>${scheduleDisp} ${t.time}</span>
-                <span style="cursor:pointer; font-weight:bold;" onclick="removeTodo(${t.id})">×</span>
+                <span>${schedule} ${t.time}</span>
+                <span style="cursor:pointer;font-weight:bold;padding:0 5px;" onclick="handleAction(${t.id})">
+                    ${t.notified ? "停止" : "×"}
+                </span>
             </header>
             <h3>${t.title}</h3>
         `;
@@ -348,24 +317,50 @@ function render() {
     });
 }
 
-function removeTodo(id) {
-    todos = todos.filter(t => t.id !== id);
-    localStorage.setItem("todos", JSON.stringify(todos));
-    
-    // 全てのアラートがなくなれば音を止める
-    if (!todos.some(t => t.notified)) {
-        stopAlarmSound();
+function handleAction(id) {
+    const idx = todos.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const t = todos[idx];
+
+    if (t.notified && (t.repeatType === "daily" || t.repeatType === "weekly")) {
+        // 繰り返し設定の場合は、次回の実行時刻を再計算してリセット
+        t.notified = false;
+        t.nextTriggerTime = calculateNextTrigger(t.repeatType, t.time, t.date, t.weekdays);
+    } else {
+        // 1回切り、または未発火の削除
+        todos.splice(idx, 1);
     }
+
+    saveAndRender();
+    if (!todos.some(t => t.notified)) stopAlarmSound();
+}
+
+function saveAndRender() {
+    localStorage.setItem("todos", JSON.stringify(todos));
     render();
 }
 
-/* ===== MODAL LOGIC ===== */
-function toggleRepeatUI() {
-    const type = document.querySelector('input[name="repeatType"]:checked').value;
-    document.getElementById("dateInputContainer").style.display = (type === "once") ? "block" : "none";
-    document.getElementById("weekdayInputContainer").style.display = (type === "weekly") ? "flex" : "none";
-}
+/* ===== MONITORING ===== */
+function checkTodos() {
+    const now = Date.now();
+    let changed = false;
 
+    todos.forEach(t => {
+        if (!t.notified && now >= t.nextTriggerTime) {
+            t.notified = true;
+            changed = true;
+            if (Notification.permission === "granted") {
+                new Notification("Time to: " + t.title);
+            }
+        }
+    });
+
+    if (todos.some(t => t.notified)) playAlarmSound();
+    if (changed) saveAndRender();
+}
+setInterval(checkTodos, 1000);
+
+/* ===== MODAL & SOUND (Same as before but integrated) ===== */
 function openModal() {
     const now = new Date();
     document.getElementById("titleInput").value = "";
@@ -373,149 +368,87 @@ function openModal() {
     document.getElementById("timeInput").value = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     document.getElementById("modal").classList.add("active");
 }
-
-function closeModal() {
-    document.getElementById("modal").classList.remove("active");
+function closeModal() { document.getElementById("modal").classList.remove("active"); }
+function toggleRepeatUI() {
+    const type = document.querySelector('input[name="repeatType"]:checked').value;
+    document.getElementById("dateInputContainer").style.display = (type === "once") ? "block" : "none";
+    document.getElementById("weekdayInputContainer").style.display = (type === "weekly") ? "flex" : "none";
 }
 
 function saveTodo() {
     const title = document.getElementById("titleInput").value;
-    if (!title) return;
-
-    const repeatType = document.querySelector('input[name="repeatType"]:checked').value;
+    const type = document.querySelector('input[name="repeatType"]:checked').value;
     const time = document.getElementById("timeInput").value;
     const date = document.getElementById("dateInput").value;
-    
+    if (!title || !time) return;
+
     let weekdays = [];
-    if (repeatType === "weekly") {
+    if (type === "weekly") {
         document.querySelectorAll(".wd-check:checked").forEach(el => weekdays.push(parseInt(el.value)));
         if (weekdays.length === 0) return alert("曜日を選択してください");
     }
 
+    const nextMs = calculateNextTrigger(type, time, date, weekdays);
+
     todos.push({
         id: Date.now(),
-        title: title,
-        repeatType: repeatType,
-        date: repeatType === "once" ? date : null,
-        weekdays: weekdays,
-        time: time,
-        notified: false,
-        lastNotifiedDate: null // 同じ日に何度も鳴らないように制御
+        title,
+        repeatType: type,
+        date,
+        weekdays,
+        time,
+        nextTriggerTime: nextMs,
+        notified: false
     });
 
-    localStorage.setItem("todos", JSON.stringify(todos));
+    saveAndRender();
     closeModal();
-    render();
 }
 
-/* ===== MONITORING ===== */
-function checkTodos() {
-    const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
-    const currentTimeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-    
-    let changed = false;
-
-    todos.forEach(t => {
-        // 条件判定
-        let isMatch = false;
-        if (t.time === currentTimeStr && t.lastNotifiedDate !== todayStr) {
-            if (t.repeatType === "once" && t.date === todayStr) isMatch = true;
-            else if (t.repeatType === "daily") isMatch = true;
-            else if (t.repeatType === "weekly" && t.weekdays.includes(now.getDay())) isMatch = true;
-        }
-
-        if (isMatch) {
-            t.notified = true;
-            t.lastNotifiedDate = todayStr;
-            changed = true;
-
-            // ブラウザ通知
-            if (Notification.permission === "granted") {
-                new Notification("Alarm", { body: t.title });
-            }
-        }
-    });
-
-    // アラーム音のループ管理
-    if (todos.some(t => t.notified)) {
-        playAlarmSound();
-    }
-
-    if (changed) {
-        localStorage.setItem("todos", JSON.stringify(todos));
-        render();
-    }
-}
-
-setInterval(checkTodos, 1000);
-render();
-
-// 通知の許可
-if (window.Notification) {
-    Notification.requestPermission();
-}
-
-/* ===== FULLSCREEN (iPad-friendly) ===== */
-function isNativeFullscreenSupported() {
-    return !!(
-        document.fullscreenEnabled ||
-        document.webkitFullscreenEnabled ||
-        document.msFullscreenEnabled
-    );
-}
-
-function toggleFullscreen() {
-    // If already in native fullscreen -> exit
-    const fsElement = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-    if (fsElement) {
-        exitFullscreen();
-        return;
-    }
-
-    // Try native request if supported, otherwise enable pseudo-fullscreen
-    const el = document.documentElement;
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-
-    if (req) {
-        req.call(el).catch(() => {
-            // fallback
-            enablePseudoFullscreen();
+function playAlarmSound() {
+    if (alarmInterval) return;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const beep = () => {
+        [0, 0.2].forEach(d => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'square';
+            o.frequency.setValueAtTime(880, ctx.currentTime + d);
+            g.gain.setValueAtTime(0.1, ctx.currentTime + d);
+            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + d + 0.1);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + 0.1);
         });
+    };
+    beep();
+    alarmInterval = setInterval(beep, 1500);
+}
+
+function stopAlarmSound() {
+    if (alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; }
+}
+
+/* ===== FULLSCREEN ===== */
+function toggleFullscreen() {
+    const el = document.documentElement;
+    const isFS = document.fullscreenElement || document.webkitFullscreenElement;
+    if (isFS) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document);
+        document.body.classList.remove('pseudo-fullscreen');
     } else {
-        enablePseudoFullscreen();
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) req.call(el).catch(() => document.body.classList.add('pseudo-fullscreen'));
+        else document.body.classList.add('pseudo-fullscreen');
     }
-}
-
-function exitFullscreen() {
-    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-    if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
-        exit.call(document).catch(() => disablePseudoFullscreen());
-    } else {
-        disablePseudoFullscreen();
-    }
-}
-
-function enablePseudoFullscreen() {
-    document.body.classList.add('pseudo-fullscreen');
-    document.getElementById('fullscreenBtn').textContent = '戻る';
-}
-
-function disablePseudoFullscreen() {
-    document.body.classList.remove('pseudo-fullscreen');
-    document.getElementById('fullscreenBtn').textContent = '全画面';
 }
 
 document.addEventListener('fullscreenchange', () => {
-    const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    document.getElementById('fullscreenBtn').textContent = isFS ? '戻る' : '全画面';
-    if (!isFS) disablePseudoFullscreen();
+    document.getElementById('fullscreenBtn').textContent = document.fullscreenElement ? '戻る' : '全画面';
 });
 
-// Update button text on load in case of state
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('fullscreenBtn').textContent = '全画面';
-});
+if (window.Notification) Notification.requestPermission();
+render();
 </script>
 </body>
 </html>
